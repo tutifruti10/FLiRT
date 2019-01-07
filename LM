@@ -19,8 +19,6 @@ class LocalModel(object):
         self.Y=None
         self.num_data = 0
         self.eta = self.opt.init_eta
-        self.usedL=None #Kernel to be updated 
-        self.usedAlpha=None
         self.kernel=self.opt.kern
         self.gp= GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=self.opt.n_restarts_optimizer)
         return
@@ -34,16 +32,9 @@ class LocalModel(object):
         	dist = X - c 
         	self.gp=gp.fit(dist, y)
         	self.kernel=gp.kernel_
-        	self.usedL=self.gp.L_
-        	self.usedAlpha=self.gp.alpha_
         	self.trained=True
         return
-    
-    def get_activation(self, X):
-    	sdist = (X - self.center) ** 2
-    	lengthscalesq = self.kernel.k2.length_scale
-    	mdist = sdist / lengthscalesq
-    	return np.exp(-0.5 * np.sum(mdist))
+        
     def get_w(self, X):
         # N = np.shape(X)[0]
         sdist = (X - self.center) ** 2
@@ -65,20 +56,19 @@ class LocalModel(object):
     		k_new=self.kernel(x_new,x_new)
     		kk_new=self.kernel(self.gp.X_train_,x_new)
     		
-    		self.X=np.concatenate((self.X,x_n),axis=0)
+    		self.X=np.concatenate((self.X,x_n),axis=0) #save all of the data used for training
     		self.Y=np.concatenate((self.Y,y_new),axis=0)
     		self.gp.X_train_=self.X-self.center
     		self.gp.y_train_=self.Y
     		
-    		l=solve(self.gp.L_,kk_new)
+    		l=solve(self.gp.L_,kk_new) 
     		l_star=np.sqrt(k_new-dot(l.T,l))
     		a=np.concatenate((self.gp.L_,np.zeros(dim).reshape(dim,1)),axis=1) 
     		b=np.concatenate((l.T,l_star.reshape(1,1)),axis=1)
     		L_new= np.concatenate((a,b),axis=0)
     		alpha_new=cho_solve((L_new, True), self.gp.y_train_)
-    		 
-    		self.gp.L_=L_new
-    		self.usedL=L_new
+ 
+    		self.gp.L_=L_new    	#update the relavant  variables in the GP
     		self.gp.alpha_=alpha_new
     		self.gp._K_inv=None
     	else: 
