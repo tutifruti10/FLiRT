@@ -1,0 +1,17 @@
+#still need to be modified
+from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+class Options(object):
+    '''parameter settings for LGR'''
+
+    def __init__(self, lmD):
+        self.max_iter = 100
+        self.init_lambda = 0.3
+        self.activ_thresh = 0.5
+        self.init_eta = 0.0001
+        self.fr = 0.999
+        self.max_num_lm = 1000
+        self.beta = 1e-6
+        self.do_pruning = True
+        self.n_restarts_optimizer=9
+        self.var_approx_type = 0 
+        self.kern=C(1.0, (1e-3, 1e3)) * RBF(1.5, (1e-2, 1e2))
