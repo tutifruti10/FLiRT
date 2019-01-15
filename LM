@@ -6,11 +6,11 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
 
 class LocalModel(object):
-    def __init__(self, opt, D):
-        self.D = D
-        self.opt = opt
-        self.set_initial_state()
-        self.trained=False
+    def __init__(self, opt,D):
+    	self.D=D
+    	self.opt = opt
+    	self.set_initial_state()
+    	self.trained=False
 
     def set_initial_state(self):
         self.center = np.array(self.D) #figure out why this is the initial state... might be wrong
@@ -34,13 +34,8 @@ class LocalModel(object):
         	self.kernel=gp.kernel_
         	self.trained=True
         return
-        
-    def get_w(self, X):
-        # N = np.shape(X)[0]
-        sdist = (X - self.center) ** 2
-        lengthscalesq = self.kernel.k2.length_scale** 2
-        mdist = sdist / lengthscalesq
-        return np.exp(-0.5 * np.sum(mdist, axis=1, keepdims=True))
+    def get_ww(self, X):
+    	return self.kernel(self.center,X)
         
     def predict_(self, X):
     	dist=X-self.center
@@ -50,7 +45,7 @@ class LocalModel(object):
     def update_(self,x_n,y_new):
     	if self.trained is True:
     		
-    		dim=len(self.X)
+    		dim=len(self.gp.X_train_)
     		
     		x_new=x_n-self.center
     		k_new=self.kernel(x_new,x_new)
@@ -73,4 +68,5 @@ class LocalModel(object):
     		self.gp._K_inv=None
     	else: 
     		raise ValueError('GP not trained; please use the train function to train it')
+    
     
