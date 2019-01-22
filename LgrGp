@@ -59,30 +59,50 @@ class LGR(object):
             
     def predict(self, x): 
     	yp = 0.0
-    	sig=10**(-10)
+    	sig=0.0
     	wtot=0.0
     	for m in range(0, self.M):
     		lm = self.lmodels[m]
     		w =  self.lmodels[m].get_ww(x) 
     		y_pred, sigma=  self.lmodels[m].predict_(x)
-    		sig=1/sig+1/(sigma)
+    		if m==0:
+    			sig=sigma
+    		else:
+    			sig=1/(1/sig+1/(sigma))
     		wtot+=np.array(w)
     		yp += w * np.array(y_pred).reshape(w.shape)
-    	return yp/wtot, 1/sig
+    	return yp/wtot, sig
     
     def update(self,x_new,y_new):
     	n_data = x_new.shape[0]
-    	self.add_local_model( x_new[0, :])
     	for n in range(0, n_data):
     		xn = x_new[n, :]
     		w = np.zeros(self.M)
-    		for m in range(0, self.M-1):
+    		for m in range(0, self.M):
+    			lm = self.lmodels[m]
+    			w[m] = lm.get_ww(xn[np.newaxis, :])
+    			index, max_act = max(enumerate(w), key=operator.itemgetter(1))
+    		print(index,max_act,w)
+    		if max_act < self.opt.activ_thresh:
+    			self.add_local_model(xn)
+    		else: 
+    			self.lmodels[index].update_(x_new,y_new)
+    	return 
+    def update2(self,x_new,y_new):
+    	n_data = x_new.shape[0]
+    	for n in range(0, n_data):
+    		xn = x_new[n, :]
+    		w = np.zeros(self.M)
+    		for m in range(0, self.M):
     			lm = self.lmodels[m]
     			w[m] = lm.get_ww(xn[np.newaxis, :])
     			index, max_act = max(enumerate(w), key=operator.itemgetter(1))
     		print(index,max_act)
     		if max_act < self.opt.activ_thresh:
     			self.add_local_model(xn)
-    		else: 
-    			self.lmodels[index].update_(x_new,y_new)
+    		else:
+    			where=w > self.opt.activ_thresh
+    			indices=[i for i, x in enumerate(where) if x]
+    			for index in indices:
+    				self.lmodels[index].update_(x_new,y_new)
     	return 
