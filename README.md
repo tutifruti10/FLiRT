@@ -5,6 +5,19 @@ Status:
 - can increment by calling lm.update_(x_new,y_new) where x_new and y_new consist of one data point
 
 Example of initalizig a local model and then incrementing it: 
+import optionsGP
+from optionsGP import Options
+
+import LocalModelGp
+from LocalModelGp import LocalModel
+
+import LgrGp
+from LgrGp import LGR
+
+import importlib
+import numpy as np
+from matplotlib import pyplot as plt
+
 opt=Options()
 def f(x):
     return x*np.sin(x)
@@ -25,7 +38,6 @@ y_pred=y_pred.reshape(1000,1)
 
 model2.update(x_new,y_new)
 y_pred2,sigma2=model2.predict(x)
-model.update2(x_new,y_new)
 sigma2=sigma2.reshape(1000,1)
 y_pred2=y_pred2.reshape(1000,1) 
 
@@ -33,7 +45,7 @@ PLOTTING:
 plt.figure()
 plt.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
 plt.plot(X, y, 'r.', markersize=10, label=u'Observations')
-plt.plot(X_new, yn, 'y.', markersize=10, label=u'Observations')
+plt.plot(x_new, y_new, 'y.', markersize=10, label=u'Observations')
 plt.plot(x, y_pred, 'b-', label=u'Prediction')
 plt.fill(np.concatenate([x, x[::-1]]),
           np.concatenate([y_pred - 1.9600 * sigma,
