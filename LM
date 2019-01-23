@@ -68,5 +68,4 @@ class LocalModel(object):
     		self.gp._K_inv=None
     	else: 
     		raise ValueError('GP not trained; please use the train function to train it')
-    
-    
+   
