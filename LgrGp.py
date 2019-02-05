@@ -11,14 +11,14 @@ class LGR(object):
         self.M = 0  # number of local models
         self.opt = opt
         self.beta=opt.beta #noise of data
-        self.lmodels = [None] * opt.max_num_lm
-        for i in range(0, opt.max_num_lm):
-            self.lmodels[i] = LocalModel(opt, self.D)
-        self.lmasks=[False]*opt.max_num_lm
+        self.lmodels = []
+        self.lmasks=[]
             
             
     def add_local_model(self, X=None ,Y=None): 
         if(self.M + 1 < self.opt.max_num_lm):
+            self.lmodels.append(LocalModel(self.opt,self.D))
+            self.lmasks.append(False)
             self.lmodels[self.M].init_lm(X, Y) 
             self.M = self.M + 1
         else:
@@ -65,7 +65,14 @@ class LGR(object):
                 lm=self.lmodels[(self.M-1)]
                 lm = self.init_train(X,Y,lm)
                 if lm==None:
-                    self.lmasks[(self.M-1)]=None
+                    del self.lmodels[(self.M-1)]
+                    del self.lmasks[(self.M-1)]
+                    self.M-=1
+                    
+        for i in range(self.M-1,-1,-1):
+            if self.prune_overlaps(i,True):
+                del self.lmodels[i]
+                self.M-=1
     """
     def initialize2(self,X,Y,radius):
         self.add_local_model(X[0,:])
@@ -76,6 +83,11 @@ class LGR(object):
     """
     
     def check_overlap(self,lm1,lm2):
+        """
+        Checks for an overlap between two local models
+        """
+        if not isinstance(lm1,LocalModel) or not isinstance(lm2,LocalModel):
+            raise TypeError("Incorrect argument type; please pass two local models.")
         x=lm1.X[:,0]
         y=lm2.X[:,0]
         index=np.argsort(x)
@@ -85,6 +97,26 @@ class LGR(object):
         mask=x[yindex] != y
         result=np.ma.array(yindex,mask=mask)
         return result
+        
+    def prune_overlaps(self,ind,delete=False):
+        """
+        Give one local model index as an argument to produce a count of its unique points, deleting the model if it has none.
+        """
+        lm = self.lmodels[ind]
+        mask=np.zeros(lm.X.shape[0],dtype=bool)
+        for l in range(self.M):        
+            if self.lmodels[l]==lm:
+                continue
+            r=self.check_overlap(self.lmodels[l],lm)
+            mask|=~r.mask
+        unique=np.sum(mask)
+        if unique==lm.X.shape[0]:
+            print("Model has no unique points; deleting")
+            return True
+        else:
+            print("Model has ", lm.X.shape[0] - unique, " unique points")
+            lm.unique=lm.X.shape[0] - unique
+            return False
     
     def predict(self, x): 
     	yp = 0.0
