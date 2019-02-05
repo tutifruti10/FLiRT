@@ -11,7 +11,8 @@ class LocalModel(object):
         self.opt = opt
         self.set_initial_state()
         self.trained=False
-
+        self.unique=None
+        
     def set_initial_state(self):
         self.center = np.array(self.D) #figure out why this is the initial state... might be wrong
         self.lm=None #added, to save the local gp trained maybe.. who knows
