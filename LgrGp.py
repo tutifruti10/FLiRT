@@ -13,6 +13,7 @@ class LGR(object):
         self.beta=opt.beta #noise of data
         self.lmodels = []
         self.lmasks=[]
+        self.cut=[]
             
             
     def add_local_model(self, X=None ,Y=None): 
@@ -27,6 +28,7 @@ class LGR(object):
         return 0       
     def init_train(self,X,Y,lm):
         w=np.zeros(X.shape[0])
+        cut=[]
         for i in range(self.opt.n_train):
             x=[]
             y=[]
@@ -81,11 +83,11 @@ class LGR(object):
         indices=self.tree.query_ball_point(X[0,:],radius)
         self.init_train(X[indices],Y[indices],lm)
     """
-    
+    """
     def check_overlap(self,lm1,lm2):
-        """
-        Checks for an overlap between two local models
-        """
+        
+        Checks for an overlap between two local models. Returns indices in the first model of any overlapping points.
+        
         if not isinstance(lm1,LocalModel) or not isinstance(lm2,LocalModel):
             raise TypeError("Incorrect argument type; please pass two local models.")
         x=lm1.X[:,0]
@@ -97,6 +99,17 @@ class LGR(object):
         mask=x[yindex] != y
         result=np.ma.array(yindex,mask=mask)
         return result
+    """ 
+        
+    def check_overlap2(self,lm1,lm2):
+        if not isinstance(lm1,LocalModel) or not isinstance(lm2,LocalModel):
+            raise TypeError("Incorrect argument type; please pass two local models.")
+        x=lm1.X
+        y=lm2.X
+        nrows,ncols=x.shape
+        dtype={'names':['f{}'.format(i) for i in range(ncols)],'formats':ncols*[x.dtype]}
+        C,indx,indy=np.intersect1d(x.view(dtype),y.view(dtype),return_indices=True)
+        return indx
         
     def prune_overlaps(self,ind,delete=False):
         """
@@ -107,8 +120,8 @@ class LGR(object):
         for l in range(self.M):        
             if self.lmodels[l]==lm:
                 continue
-            r=self.check_overlap(self.lmodels[l],lm)
-            mask|=~r.mask
+            r=self.check_overlap2(self.lmodels[l],lm)
+            mask[r]=True
         unique=np.sum(mask)
         if unique==lm.X.shape[0]:
             print("Model has no unique points; deleting")
