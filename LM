@@ -4,6 +4,8 @@ from scipy.linalg import cholesky, inv, solve, cho_solve
 from matplotlib import pyplot as plt
 from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+import scipy
+import operator
 
 class LocalModel(object):
     def __init__(self, opt,D):
@@ -43,11 +45,40 @@ class LocalModel(object):
     
     def get_ww(self, X):
         return self.kernel(self.center,X)
+    def get_wk2(self, X):
+        return self.kernel.k2(self.center,X)
+    def get_wpk2(self, X):
+    	w=[]
+    	for i in X:
+    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+    		ww=self.kernel.k2(self.X[index],i.reshape(1,1))
+    		w.append(ww)
+    	return np.asarray(w).reshape(1,len(X))
         
+    def get_wpred(self, X):
+    	w=[]
+    	for i in X:
+    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+    		ww=self.kernel(self.X[index],i.reshape(1,1))
+    		w.append(ww)
+    	return np.asarray(w).reshape(1,len(X))
+        
+    def predict_2(self, X):
+    	dist=[]
+    	for i in X:
+    		d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(d), key=operator.itemgetter(1))
+    		dist.append((self.X[index]-i))
+    	dist=np.asarray(dist)
+    	y_pred, sigma = self.gp.predict(dist, return_std=True)
+    	return y_pred, sigma
+    
     def predict_(self, X):
-        dist=X-self.center
-        y_pred, sigma = self.gp.predict(dist, return_std=True)
-        return y_pred, sigma
+    	dist=X-self.center
+    	y_pred, sigma = self.gp.predict(dist, return_std=True)
+    	return y_pred, sigma
         
     def update_(self,x_n,y_new):
         if self.trained is True:
@@ -64,7 +95,7 @@ class LocalModel(object):
             self.gp.y_train_=self.Y
             
             l=solve(self.gp.L_,kk_new) 
-            l_star=np.sqrt(k_new-dot(l.T,l))
+            l_star=np.sqrt(abs(k_new-dot(l.T,l)))
             a=np.concatenate((self.gp.L_,np.zeros(dim).reshape(dim,1)),axis=1) 
             b=np.concatenate((l.T,l_star.reshape(1,1)),axis=1)
             L_new= np.concatenate((a,b),axis=0)
@@ -74,7 +105,7 @@ class LocalModel(object):
             self.gp.alpha_=alpha_new
             self.gp._K_inv=None
         else: 
-            raise ValueError('GP not trained; please use the train function to train it')
+            raise ValueError('LM not trained!')
     
     
        
