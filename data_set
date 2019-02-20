@@ -1,0 +1,30 @@
+import numpy as np
+from scipy.stats import gaussian_kde
+import matplotlib.pyplot as plt
+import LgrGp
+from LgrGp import LGR
+import LM
+from LM import LocalModel
+import Options
+from Options import Option
+
+from collections import Counter
+import h5py 
+f=h5py.File('/Users/izaveliscek/Desktop/GpCode/MSSMEW.hdf5') 
+
+list(f.keys())
+g = f.get('MSSMEW')
+
+
+l1 = g.get('#LHC_LogLike_per_SR @ColliderBit::get_LHC_LogLike_per_SR::ATLAS_13TeV_3b_24invfb__combined_LogLike')
+M2 = g.get('#MSSM11atQ_mA_parameters @MSSM11atQ_mA::primary_parameters::M2')
+M1 = g.get('#MSSM11atQ_mA_parameters @MSSM11atQ_mA::primary_parameters::M1')
+MU = g.get('#MSSM11atQ_mA_parameters @MSSM11atQ_mA::primary_parameters::mu')
+TANB = g.get('#MSSM11atQ_mA_parameters @MSSM11atQ_mA::primary_parameters::TanBeta')
+
+X=np.vstack((M1,M2,MU,TANB)).T[0::100]
+l=np.asarray(l1)[0::100]
+opt=Option()
+model=None
+model=LGR(opt,4)
+model.initialize_lm(X,l)
