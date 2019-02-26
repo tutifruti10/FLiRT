@@ -1,3 +1,4 @@
+
 import numpy as np
 from numpy import dot
 from scipy.linalg import cholesky, inv, solve, cho_solve
@@ -23,16 +24,16 @@ class LocalModel(object):
         self.num_data = 0
         self.eta = self.opt.init_eta
         self.kernel=self.opt.kern
-        self.gp= GaussianProcessRegressor(kernel=self.kernel, n_restarts_optimizer=self.opt.n_restarts_optimizer)
+        self.gp= GaussianProcessRegressor(kernel=self.kernel,alpha=1e-10,n_restarts_optimizer=self.opt.n_restarts_optimizer)
         return
     
-    def init_lm(self, X=None, y=None):
+    def init_lm(self, X=None, y=None, noise=1e-10):
         if X.ndim==1:
             self.center = X
         else:
             self.center = np.mean(X,axis=0)
-        gp=self.gp
         if (X is not None) and (y is not None):
+            gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
             self.X=X
             self.Y=y
             dist = X - self.center
@@ -48,39 +49,39 @@ class LocalModel(object):
     def get_wk2(self, X):
         return self.kernel.k2(self.center,X)
     def get_wpk2(self, X):
-    	w=[]
-    	for i in X:
-    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-    		ww=self.kernel.k2(self.X[index],i.reshape(1,1))
-    		w.append(ww)
-    	return np.asarray(w).reshape(1,len(X))
+        w=[]
+        for i in X:
+            dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+            index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+            ww=self.kernel.k2(self.X[index],i.reshape(1,1))
+            w.append(ww)
+        return np.asarray(w).reshape(1,len(X))
         
     def get_wpred(self, X):
-    	w=[]
-    	for i in X:
-    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-    		ww=self.kernel(self.X[index],i.reshape(1,1))
-    		w.append(ww)
-    	return np.asarray(w).reshape(1,len(X))
+        w=[]
+        for i in X:
+            dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+            index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+            ww=self.kernel(self.X[index],i.reshape(1,1))
+            w.append(ww)
+        return np.asarray(w).reshape(1,len(X))
         
     def predict_2(self, X):
-    	dist=[]
-    	for i in X:
-    		d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(d), key=operator.itemgetter(1))
-    		dist.append((self.X[index]-i))
-    	dist=np.asarray(dist)
-    	y_pred, sigma = self.gp.predict(dist, return_std=True)
-    	return y_pred, sigma
+        dist=[]
+        for i in X:
+            d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+            index, min_act = min(enumerate(d), key=operator.itemgetter(1))
+            dist.append((self.X[index]-i))
+        dist=np.asarray(dist)
+        y_pred, sigma = self.gp.predict(dist, return_std=True)
+        return y_pred, sigma
     
     def predict_(self, X):
-    	dist=X-self.center
-    	y_pred, sigma = self.gp.predict(dist, return_std=True)
-    	return y_pred, sigma
+        dist=X-self.center
+        y_pred, sigma = self.gp.predict(dist, return_std=True)
+        return y_pred, sigma
         
-    def update_(self,x_n,y_new):
+    def update_(self,x_n,y_new,noise=1e-10):
         if self.trained is True:
             
             dim=len(self.gp.X_train_)
@@ -89,7 +90,7 @@ class LocalModel(object):
             self.Y=np.concatenate((self.Y,y_new),axis=0)
             self.center = np.mean(self.X,axis=0)
             x_new=x_n-self.center
-            k_new=self.kernel(x_new,x_new)
+            k_new=self.kernel(x_new,x_new)+noise
             kk_new=self.kernel(self.gp.X_train_,x_new)
             self.gp.X_train_=self.X-self.center
             self.gp.y_train_=self.Y
@@ -106,6 +107,3 @@ class LocalModel(object):
             self.gp._K_inv=None
         else: 
             raise ValueError('LM not trained!')
-    
-    
-       
