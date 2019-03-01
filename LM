@@ -1,4 +1,3 @@
-
 import numpy as np
 from numpy import dot
 from scipy.linalg import cholesky, inv, solve, cho_solve
@@ -27,61 +26,73 @@ class LocalModel(object):
         self.gp= GaussianProcessRegressor(kernel=self.kernel,alpha=1e-10,n_restarts_optimizer=self.opt.n_restarts_optimizer)
         return
     
-    def init_lm(self, X=None, y=None, noise=1e-10):
+    def init_lm(self, X=None, y=None, noise=None):
+        if noise==None:
+            noise=1e-10
         if X.ndim==1:
             self.center = X
         else:
             self.center = np.mean(X,axis=0)
         if (X is not None) and (y is not None):
-            gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
-            self.X=X
-            self.Y=y
-            dist = X - self.center
-            self.gp=gp.fit(dist, y)
-            self.kernel=gp.kernel_
-            self.trained=True
-            self.overlap=np.zeros(y.shape)
+        	gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
+        	self.X=X
+        	self.Y=y
+        	dist = X - self.center
+        	self.gp=gp.fit(dist, y)
+        	self.kernel=gp.kernel_
+        	self.trained=True
+        	self.overlap=np.zeros(y.shape)
         return
     
     
     def get_ww(self, X):
         return self.kernel(self.center,X)
+        
+    def get_wwP(self, X):
+        w=np.zeros(X.shape[0])
+        if self.X.shape[0]==1:
+              w=np.zeros(X.shape[0])
+        else:
+            w=self.kernel(self.center,X)
+        return w
+        
     def get_wk2(self, X):
         return self.kernel.k2(self.center,X)
     def get_wpk2(self, X):
-        w=[]
-        for i in X:
-            dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-            index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-            ww=self.kernel.k2(self.X[index],i.reshape(1,1))
-            w.append(ww)
-        return np.asarray(w).reshape(1,len(X))
+    	w=[]
+    	for i in X:
+    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+    		ww=self.kernel.k2(self.X[index],i.reshape(1,1))
+    		w.append(ww)
+    	return np.asarray(w).reshape(1,len(X))
         
     def get_wpred(self, X):
-        w=[]
-        for i in X:
-            dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-            index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-            ww=self.kernel(self.X[index],i.reshape(1,1))
-            w.append(ww)
-        return np.asarray(w).reshape(1,len(X))
-        
+    	w=[]
+    	for i in X:
+    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+    		ww=self.kernel(self.X[index],i.reshape(1,1))
+    		w.append(ww)
+    	return np.asarray(w).reshape(1,len(X))
     def predict_2(self, X):
-        dist=[]
-        for i in X:
-            d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-            index, min_act = min(enumerate(d), key=operator.itemgetter(1))
-            dist.append((self.X[index]-i))
-        dist=np.asarray(dist)
-        y_pred, sigma = self.gp.predict(dist, return_std=True)
-        return y_pred, sigma
+    	dist=[]
+    	for i in X:
+    		d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+    		index, min_act = min(enumerate(d), key=operator.itemgetter(1))
+    		dist.append((self.X[index]-i))
+    	dist=np.asarray(dist)
+    	y_pred, sigma = self.gp.predict(dist, return_std=True)
+    	return y_pred, sigma
     
     def predict_(self, X):
-        dist=X-self.center
-        y_pred, sigma = self.gp.predict(dist, return_std=True)
-        return y_pred, sigma
-        
-    def update_(self,x_n,y_new,noise=1e-10):
+    	dist=X-self.center
+    	y_pred, sigma = self.gp.predict(dist, return_std=True)
+    	return y_pred, sigma
+    
+    def update_(self,x_n,y_new,noise=None):
+        if noise is None:
+            noise=1e-10
         if self.trained is True:
             
             dim=len(self.gp.X_train_)
@@ -107,3 +118,6 @@ class LocalModel(object):
             self.gp._K_inv=None
         else: 
             raise ValueError('LM not trained!')
+    
+    
+       
