@@ -1,3 +1,7 @@
+import os
+os.chdir("/Users/izaveliscek/Desktop")
+my_path =os.path.abspath("/Users/izaveliscek/Desktop")
+
 import Options
 from Options import Option
 
@@ -10,11 +14,10 @@ from Lgr import LGR
 import importlib
 import numpy as np
 from matplotlib import pyplot as plt
-import os
-my_path =os.path.abspath("/Users/izaveliscek/Desktop")
 
 
-opt=Option()
+
+opt=Option(const=1.0,length=0.3,n_train=8,max_overlap=3)
 def f(x):
 	if x>0:
 		return 20*np.exp(-0.2*x)
@@ -23,30 +26,33 @@ def f(x):
 
 N=30
 n=1000
-#np.random.seed(3)
-#np.random.seed(10)
+
+np.random.seed(96)
 X2 = np.atleast_2d([np.random.uniform(-30,30,N)]).T
 
 
 vfun=np.vectorize(f)
 y2=vfun(X2).reshape(N,)
+dy = 0.0+ 0. * np.random.random(y2.shape)
+noise = np.random.normal(0, dy)
+y2 += noise
 x=np.atleast_2d([np.linspace(-30,30,1000)]).T
 model3=None
 model3=LGR(opt,1)
-model3.initialize_lm(X2,y2)
-y_predW,sigmaW=model3.predict(x)
-y_predCP,sigmaCP=model3.predict2(x)
-y_pk2,sigmak2=model3.predict3(x)
-y_pck2,sigmack2=model3.predict4(x)
+model3.initialize_lm(X2,y2,dy**2)
+#getting predictions
+y_pred,sigma=model3.predict(x) #center, inf w
+y_predO,sigmaO=model3.predict2(x) #center
+y_pck2,sigmack2=model3.predict4(x) #closest point, inf w
 centres=np.zeros(model3.M)
 yp=np.zeros((model3.M,x.shape[0]))
 sig=np.zeros((model3.M,x.shape[0]))
 X_train=[]
 Y_train=[]
 ww=[]
-wpoint=[]
-wk2=[]
+wO=[]
 wck2=[]
+list_kernel=[]
 for i in range(model3.M):
 	centres[i]=model3.lmodels[i].center
 	yy,si=model3.lmodels[i].predict_(x)
@@ -56,25 +62,26 @@ for i in range(model3.M):
 	X_train.append(xx[:,0])
 	yyy=model3.lmodels[i].Y
 	Y_train.append(yyy)
+	w2=model3.lmodels[i].get_wwold(x)
 	w1=model3.lmodels[i].get_ww(x)
-	w2=model3.lmodels[i].get_wpred(x)
-	w3=model3.lmodels[i].get_wk2(x)
 	w4=model3.lmodels[i].get_wpk2(x)
 	ww.append(w1)
-	wpoint.append(w2)
-	wk2.append(w3)
 	wck2.append(w4)
+	wO.append(w2)
+	list_kernel.append(model3.lmodels[i].kernel)
 
 ww=np.asarray(ww)
 ww=ww.reshape(model3.M,n)
-wpoint=np.asarray(wpoint)
-wpoint=wpoint.reshape(model3.M,n)
-wk2=np.asarray(wk2)
-wk2=wk2.reshape(model3.M,n)
 wck2=np.asarray(wck2)
 wck2=wck2.reshape(model3.M,n)
-	
+wO=np.asarray(ww)
+wO=ww.reshape(model3.M,n)
+wtot=np.sum(ww,axis=0)
+wtotcp=np.sum(wck2,axis=0)	
+wtotO=np.sum(wO,axis=0)
 ycentres=np.zeros(model3.M)
+
+#plotting local models
 fig = plt.figure()
 fig.subplots_adjust(hspace=0.4, wspace=0.4)
 for i in range(model3.M):
@@ -85,39 +92,77 @@ for i in range(model3.M):
 	ax.plot(centres[i],ycentres[i],'g.',markersize=10,label=u'Model centres')
 	ax.set_xlabel('$x$')
 	ax.set_ylabel('$f(x)$')
-#	ax.legend(loc=2) 
 	ax.fill(np.concatenate([x, x[::-1]]),
           np.concatenate([yp[i] - 1.9600 * sig[i], 
 	(yp[i] + 1.9600 * sig[i])[::-1]]),
           alpha=.5, fc='b', ec='None', label='95% confidence interval')
-fig.savefig(my_path + '/LocalModel_Run4.png')
+#fig.savefig(my_path + '/LocalModel_RandomSeed(2).png')
 plt.show()
-
-
+#Global prediction with local model center  weighting, inf w at training point
 fig = plt.figure()
-fig.subplots_adjust(hspace=0.7, wspace=0.5)
-ax = fig.add_subplot(4, 1, 1)
+fig.subplots_adjust(hspace=0.4, wspace=0.4)
+ax = fig.add_subplot(2, 1, 1)
 ax.plot(x, vfun(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
 ax.plot(x, vfun(x), 'r:', label=u'$f(x) = 20 exp(-0.2*x)$')
-ax.plot(centres,ycentres,'g.',markersize=10,label=u'Model centres')
-ax.plot(X2, y2, 'r.', markersize=10, label=u'Observations')
-ax.plot(x, y_predCP, 'b-', label=u'Prediction')
+ax.plot(centres,ycentres,'g.',markersize=8,label=u'Model centres')
+ax.plot(X2, y2, 'r.', markersize=8, label=u'Observations')
+ax.plot(x, y_pred, 'b-', label=u'Prediction')
 ax.fill(np.concatenate([x, x[::-1]]),
-          np.concatenate([y_predCP - 1.9600 * sigmaCP,
-                         (y_predCP+ 1.9600 * sigmaCP)[::-1]]),
+          np.concatenate([y_pred - 1.9600 * sigma,
+                         (y_pred+ 1.9600 * sigma)[::-1]]),
           alpha=.5, fc='b', ec='None', label='95% confidence interval')
 ax.set_xlabel('$x$')
 ax.set_ylabel('$f(x)$')
 ax.set_ylim(-50, 50)
 (-50, 50)
-ax.set_title('Global prediction with closest training point to prediction point used for whole kernel weighting' , fontdict=None, loc='center')
-#ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-           #     bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 2)
+ax.set_title('Global prediction with local model center  weighting, inf w at training point' , fontdict=None, loc='center')
+ax = fig.add_subplot(2, 1, 2)
+for i in range(model3.M):
+	ax.plot(x, ww[i,:]/wtot,label=u'%s ' %list_kernel[i])
+	ax.plot(centres[i],ycentres[i],'.',markersize=10)
+	ax.set_xlabel('$x$')
+	ax.set_ylabel('$weights$')
+	ax.legend(bbox_to_anchor=(1,0),  
+                bbox_transform=fig.transFigure, ncol=3)
+#fig.savefig(my_path + '/GlobalPredictionsCenter_RandomSeed(2).png')
+plt.show()
+                
+#  Global prediction with local model center to prediction point used for whole kernel weighting
+fig = plt.figure()
+fig.subplots_adjust(hspace=0.4, wspace=0.4)
+ax = fig.add_subplot(2, 1, 1)
 ax.plot(x, vfun(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
 ax.plot(x, vfun(x), 'r:', label=u'$f(x) = 20 exp(-0.2*x)$')
-ax.plot(centres,ycentres,'g.',markersize=10,label=u'Model centres')
-ax.plot(X2, y2, 'r.', markersize=10, label=u'Observations')
+ax.plot(centres,ycentres,'g.',markersize=8,label=u'Model centres')
+ax.plot(X2, y2, 'r.', markersize=8, label=u'Observations')
+ax.plot(x, y_predO, 'b-', label=u'Prediction')
+ax.fill(np.concatenate([x, x[::-1]]),
+          np.concatenate([y_predO - 1.9600 * sigmaO,
+                         (y_predO+ 1.9600 * sigmaO)[::-1]]),
+          alpha=.5, fc='b', ec='None', label='95% confidence interval')
+ax.set_xlabel('$x$')
+ax.set_ylabel('$f(x)$')
+ax.set_ylim(-50, 50)
+(-50, 50)
+ax.set_title('Global prediction with local model center to prediction point used for whole kernel weighting' , fontdict=None, loc='center')
+ax = fig.add_subplot(2, 1, 2)
+for i in range(model3.M):
+	ax.plot(x, wO[i,:]/wtotO,label=u'Model %s  weights' %i)
+	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
+	ax.set_xlabel('$x$')
+	ax.set_ylabel('$weights$')
+	ax.legend(bbox_to_anchor=(1,0),  
+                bbox_transform=fig.transFigure, ncol=3)
+#fig.savefig(my_path + '/GlobalCenterOld_RandomSeed(2).png')
+plt.show()
+#'Global prediction with closest training point to prediction point used for Matern kernel weighting
+fig = plt.figure()
+fig.subplots_adjust(hspace=0.4, wspace=0.4)
+ax = fig.add_subplot(2, 1, 1)
+ax.plot(x, vfun(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
+ax.plot(x, vfun(x), 'r:', label=u'$f(x) = 20 exp(-0.2*x)$')
+ax.plot(centres,ycentres,'g.',markersize=8,label=u'Model centres')
+ax.plot(X2, y2, 'r.', markersize=8, label=u'Observations')
 ax.plot(x, y_pck2, 'b-', label=u'Prediction')
 ax.fill(np.concatenate([x, x[::-1]]),
           np.concatenate([y_pck2 - 1.9600 * sigmack2,
@@ -128,83 +173,18 @@ ax.set_ylabel('$f(x)$')
 ax.set_ylim(-50, 50)
 (-50, 50)
 ax.set_title('Global prediction with closest training point to prediction point used for Matern kernel weighting' , fontdict=None, loc='center')
-#ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-             #   bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 3)
-ax.plot(x, vfun(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
-ax.plot(x, vfun(x), 'r:', label=u'$f(x) = 20 exp(-0.2*x)$')
-ax.plot(centres,ycentres,'g.',markersize=10,label=u'Model centres')
-ax.plot(X2, y2, 'r.', markersize=10, label=u'Observations')
-ax.plot(x, y_predW, 'b-', label=u'Prediction')
-ax.fill(np.concatenate([x, x[::-1]]),
-          np.concatenate([y_predW - 1.9600 * sigmaW,
-                         (y_predW+ 1.9600 * sigmaW)[::-1]]),
-          alpha=.5, fc='b', ec='None', label='95% confidence interval')
-ax.set_xlabel('$x$')
-ax.set_ylabel('$f(x)$')
-ax.set_ylim(-50, 50)
-(-50, 50)
-ax.set_title('Global prediction with local model center to prediction point used for whole kernel weighting' , fontdict=None, loc='center')
-#ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-              #  bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 4)
-ax.plot(x, vfun(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
-ax.plot(x, vfun(x), 'r:', label=u'$f(x) = 20 exp(-0.2*x)$')
-ax.plot(centres,ycentres,'g.',markersize=10,label=u'Model centres')
-ax.plot(X2, y2, 'r.', markersize=10, label=u'Observations')
-ax.plot(x, y_pk2, 'b-', label=u'Prediction')
-ax.fill(np.concatenate([x, x[::-1]]),
-          np.concatenate([y_pk2 - 1.9600 * sigmak2,
-                         (y_pk2+ 1.9600 * sigmak2)[::-1]]),
-          alpha=.5, fc='b', ec='None', label='95% confidence interval')
-ax.set_xlabel('$x$')
-ax.set_ylabel('$f(x)$')
-ax.set_ylim(-50, 50)
-(-50, 50)
-ax.set_title('Global prediction with local model center to prediction point used for Matern kernel weighting' , fontdict=None, loc='center')
-#ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-            #    bbox_transform=fig.transFigure, ncol=3)
-fig.savefig(my_path + '/GlobalFits_Run4.png')
+ax = fig.add_subplot(2, 1, 2)
+for i in range(model3.M):
+	ax.plot(x, wck2[i,:]/wtotcp,label=u'Model %s  weights' %i)
+	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
+	ax.set_xlabel('$x$')
+	ax.set_ylabel('$weights$')
+	ax.legend(bbox_to_anchor=(1,0),  
+                bbox_transform=fig.transFigure, ncol=3)
+#fig.savefig(my_path + '/GlobalPredictionsClosestPoint_RandomSeed(2).png')
 plt.show()
 
 
-fig = plt.figure()
-fig.subplots_adjust(hspace=0.4, wspace=0.4)
-ax = fig.add_subplot(4, 1, 1)
-for i in range(model3.M):
-	ax.plot(x, wpoint[i,:],label=u'Model %s  weights' %i)
-	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
-	ax.set_xlabel('$x$')
-	ax.set_ylabel('$weights$')
-	ax.set_title('Weights on Xpredict, set up: closest point - whole kernel' , fontdict=None, loc='center')
-	#ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-              #  bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 2)
-for i in range(model3.M):
-	ax.plot(x, wck2[i,:],label=u'Model %s  weights' %i)
-	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
-	ax.set_xlabel('$x$')
-	ax.set_ylabel('$weights$')
-	ax.set_title('Weights on Xpredict, set up: closest point - Mater kernel' , fontdict=None, loc='center')
-#	ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-            #    bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 3)
-for i in range(model3.M):
-	ax.plot(x, ww[i,:],label=u'Model %s  weights' %i)
-	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
-	ax.set_xlabel('$x$')
-	ax.set_ylabel('$weights$')
-	ax.set_title('Weights on Xpredict, set up:  centers - whole kerne' , fontdict=None, loc='center')
-#	ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-             #   bbox_transform=fig.transFigure, ncol=3)
-ax = fig.add_subplot(4, 1, 4)
-for i in range(model3.M):
-	ax.plot(x, wk2[i,:],label=u'Model %s  weights' %i)
-	ax.plot(centres[i],ycentres[i],'.',markersize=10,label=u'Model %s centres' %i)
-	ax.set_xlabel('$x$')
-	ax.set_ylabel('$Weights - center -Matern kenrel$')
-	ax.set_title('Weights on Xpredict, set up: center - Matern kenrel' , fontdict=None, loc='center')
-#	ax.legend(bbox_to_anchor=(1,0), loc="lower right", 
-            #    bbox_transform=fig.transFigure, ncol=3)
-fig.savefig(my_path + '/Weights_Run4.png')
-plt.show()
+
+
+
