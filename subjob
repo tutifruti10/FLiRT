@@ -1,0 +1,23 @@
+#PBS -lselect=1:ncpus=2:mem=4gb
+#PBS -lwalltime=174:00:00
+#PBS -M iv415@imperial.ac.uk
+#PBS -m abe
+#PBS -o output.txt
+#PBS -e error.txt
+# Load modules for any applications
+module load anaconda3/personal
+
+# Copy any input from the submission directory
+
+cp $PBS_O_WORKDIR/* .
+
+# Run program
+python $HOME/code/crossval.py
+
+
+# Copy any output back to a directory in $WORK
+
+mkdir $WORK/$PBS_JOBID
+
+cp output.txt $WORK/$PBS_JOBID/
+
