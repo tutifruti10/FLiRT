@@ -1,0 +1,52 @@
+import os
+os.chdir("/rds/general/user/iv415/home/code")
+#os.chdir("/Users/izaveliscek/Desktop")
+import numpy as np
+import matplotlib.pyplot as plt
+import Lgr
+from Lgr import LGR
+import LM
+from LM import LocalModel
+import Options
+from Options import Option
+import h5py 
+
+f=h5py.File('/rds/general/user/iv415/home/code/MSSMEW_geq4Mevents_smallset.hdf5')
+#f=h5py.File('/Users/izaveliscek/Desktop/MSSMEW_geq4Mevents_smallset.hdf5') 
+list(f.keys())
+g = f.get('MSSMEW')
+
+
+l1 = g.get('LHC_Combined_LogLike_allSR')
+M2 = g.get('M2')
+M1 = g.get('M1')
+MU = g.get('mu')
+TANB = g.get('TanBeta')
+
+
+X=np.vstack((M1,M2,MU,TANB)).T
+l=np.asarray(l1)
+opt=Option()
+model=None
+model=LGR(opt,4)
+model.initialize_lm(X[0::2],l[0::2])
+
+Xp=X[1::2]
+lp=l[1::2]
+y_pred,sigma=model.predict(Xp)
+y_pred2,sigma2=model.predict4(Xp)
+
+mse_center=(y_pred-lp)**2/lp.shape [0]
+mse_close=(y_pred2-lp)**2/lp.shape [0]
+
+print('total mse_center',sum(mse_center),'total mse_clos',sum(mse_close))
+perecnet_center=(np.abs(y_pred-lp)/lp)*100
+percent_close=(np.abs(y_pred2-lp)/lp)*100
+np.save("y_pred1",y_pred)
+np.save("y_pred2",y_pred2)
+np.save("sigma1",sigma)
+np.save("sigma2",sigma2)
+np.save("mse_center",mse_center)
+np.save("mse_close",mse_close)
+np.save("perecnet_center",perecnet_center)
+np.save("mse_close",mse_close)
