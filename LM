@@ -3,9 +3,10 @@ from numpy import dot
 from scipy.linalg import cholesky, inv, solve, cho_solve
 from matplotlib import pyplot as plt
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import RBF, ConstantKernel as C
+from sklearn.gaussian_process.kernels import RBF, Matern,ConstantKernel as C
 import scipy
 import operator
+from scipy.spatial import distance
 
 class LocalModel(object):
     def __init__(self, opt,D):
@@ -14,97 +15,111 @@ class LocalModel(object):
         self.set_initial_state()
         self.trained=False
         self.unique=None
+        self.go=False
         
     def set_initial_state(self):
         self.center = np.array(self.D) #figure out why this is the initial state... might be wrong
         self.lm=None #added, to save the local gp trained maybe.. who knows
         self.X=None
         self.Y=None
+        self.dy=None
         self.num_data = 0
         self.eta = self.opt.init_eta
+        self.length=self.opt.kern.k2.length_scale
         self.kernel=self.opt.kern
-        self.gp= GaussianProcessRegressor(kernel=self.kernel,alpha=1e-10,n_restarts_optimizer=self.opt.n_restarts_optimizer)
+        self.gp= GaussianProcessRegressor(kernel=self.kernel,alpha=1e-6,n_restarts_optimizer=self.opt.n_restarts_optimizer)
+        self.length_past=[self.opt.kern.k2.length_scale]
         return
     
-    def init_lm(self, X=None, y=None, noise=None):
-        if noise==None:
-            noise=1e-10
+    def init_lm(self,length_scale=np.array([.5,.5,15., 70.]), X=None, y=None, noise=None,go=True):
+        self.go=go
+        if noise is None:
+            noise=1e-6
         if X.ndim==1:
             self.center = X
         else:
             self.center = np.mean(X,axis=0)
+        lower_bound=length_scale/2
+        upper_bound=length_scale*2
+        bounds=np.vstack((lower_bound,upper_bound)).T
+        self.kernel=C(self.opt.const, (0.01, 1000)) * Matern(length_scale, (bounds),nu=1.5)
         if (X is not None) and (y is not None):
         	gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
         	self.X=X
         	self.Y=y
-        	dist = X - self.center
-        	self.gp=gp.fit(dist, y)
-        	self.kernel=gp.kernel_
+        	self.dy=noise
         	self.trained=True
-        	self.overlap=np.zeros(y.shape)
+        	if self.go is True:
+        	    self.gp=gp.fit(X, y)
+        	    self.kernel=gp.kernel_
+        	    self.overlap=np.zeros(y.shape)
+        	    self.length=gp.kernel_.k2.length_scale
+        	    self.length_past.append(gp.kernel_.k2.length_scale)
         return
     
     
     def get_ww(self, X):
-        return self.kernel(self.center,X)
-        
+        return self.kernel.k2(self.center,X)
+
     def get_wwP(self, X):
         w=np.zeros(X.shape[0])
+        cpp=[]
+        indices=[]
         if self.X.shape[0]==1:
-              w=np.zeros(X.shape[0])
+            w=w.reshape(1,X.shape[0])
+        else:
+            ww=self.kernel.k2(self.center,X)
+            w=self.kernel.k1.constant_value*(ww/(1-ww+1e-06))
+        return w        
+    def get_wwold(self, X):
+        w=np.zeros(X.shape[0])
+        if self.X.shape[0]==1:
+            w=np.zeros(X.shape[0])
         else:
             w=self.kernel(self.center,X)
-        return w
-        
-    def get_wk2(self, X):
-        return self.kernel.k2(self.center,X)
+        return w.reshape(1,X.shape[0])
     def get_wpk2(self, X):
-    	w=[]
-    	for i in X:
-    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-    		ww=self.kernel.k2(self.X[index],i.reshape(1,1))
-    		w.append(ww)
-    	return np.asarray(w).reshape(1,len(X))
-        
-    def get_wpred(self, X):
-    	w=[]
-    	for i in X:
-    		dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
-    		ww=self.kernel(self.X[index],i.reshape(1,1))
-    		w.append(ww)
-    	return np.asarray(w).reshape(1,len(X))
-    def predict_2(self, X):
-    	dist=[]
-    	for i in X:
-    		d=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
-    		index, min_act = min(enumerate(d), key=operator.itemgetter(1))
-    		dist.append((self.X[index]-i))
-    	dist=np.asarray(dist)
-    	y_pred, sigma = self.gp.predict(dist, return_std=True)
-    	return y_pred, sigma
+        cpp=[]
+        for i in X:
+            dist=[]
+            for j in self.X:
+                dist.append(distance.euclidean(j,i))
+            dist=np.asarray(dist)
+            #dist=scipy.spatial.distance.cdist(self.X,i.reshape(1,1))
+            index, min_act = min(enumerate(dist), key=operator.itemgetter(1))
+            ww=self.kernel.k2(self.X[index],np.atleast_2d(i))
+            cpp.append(ww)
+        cpp=np.asarray(cpp).reshape(1,len(X))
+        cpp=(cpp/(1-cpp+1e-06))
+        print(cpp.shape)
+        if self.X.shape[0]==1:
+            cpp=np.zeros(X.shape[0])
+        return cpp.reshape(1,X.shape[0])
+            
     
     def predict_(self, X):
-    	dist=X-self.center
-    	y_pred, sigma = self.gp.predict(dist, return_std=True)
+    	y_pred, sigma = self.gp.predict(X, return_std=True)
     	return y_pred, sigma
-    
-    def update_(self,x_n,y_new,noise=None):
-        if noise is None:
-            noise=1e-10
+    #For incrementally adding points
+    def update_(self,x_new,y_new,noise=None):
         if self.trained is True:
             
             dim=len(self.gp.X_train_)
             
-            self.X=np.concatenate((self.X,x_n),axis=0) #save all of the data used for training
+            self.X=np.concatenate((self.X,x_new),axis=0) #save all of the data used for training
             self.Y=np.concatenate((self.Y,y_new),axis=0)
             self.center = np.mean(self.X,axis=0)
-            x_new=x_n-self.center
-            k_new=self.kernel(x_new,x_new)+noise
+            #x_new=x_n-self.center
+            if noise is not None:
+                self.dy=np.concatenate((self.dy,noise.reshape(1,)),axis=0)
+                k_new=self.kernel(x_new,x_new)+noise
+            else:
+                k_new=self.kernel(x_new,x_new)
             kk_new=self.kernel(self.gp.X_train_,x_new)
-            self.gp.X_train_=self.X-self.center
+            self.gp.X_train_=self.X
             self.gp.y_train_=self.Y
+            if noise is None:
+                noise=1e-6
             
             l=solve(self.gp.L_,kk_new) 
             l_star=np.sqrt(abs(k_new-dot(l.T,l)))
@@ -118,6 +133,16 @@ class LocalModel(object):
             self.gp._K_inv=None
         else: 
             raise ValueError('LM not trained!')
+     #For data partitioning     
+    def update_points(self,x_n,y_new,noise=None):
+        self.X=np.concatenate((self.X,x_n),axis=0) #save all of the data used for training
+        print(self.Y.shape)
+        print(y_new.shape)
+        self.Y=np.concatenate((self.Y,y_new),axis=0)
+        if noise is not None:
+            self.dy=np.concatenate((self.dy,noise.reshape(1,)),axis=0)
+        self.center = np.mean(self.X,axis=0)
+            
     
     
        
