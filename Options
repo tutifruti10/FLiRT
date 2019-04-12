@@ -1,12 +1,13 @@
 from sklearn.gaussian_process.kernels import RBF, Matern,ConstantKernel as C
+import numpy as np
 class Option(object):
     '''parameter settings for LGR'''
 
-    def __init__(self,const=1.0,length=10,n_train=3,max_overlap=3):
+    def __init__(self,const=1.0,length=np.array([2.15, 5.73, 51, 53.4]),n_train=16,max_overlap=3):
         self.const=const
         self.length=length
         self.max_iter = 100
-        self.activ_thresh = 0.0005
+        self.activ_thresh =0.25
         self.init_eta = 0.0001
         self.max_num_lm = 1000000000
         self.beta = 1e-6
@@ -14,5 +15,10 @@ class Option(object):
         self.n_restarts_optimizer=9
         self.n_train=n_train
         self.min_train=2
-        self.kern=C(self.const, (0.001, 1000)) * Matern(self.length, (0.01, 150),nu=1.5)
+        self.kern= C(self.const, (0.01, 1000)) * Matern(self.length, (self.length/2, self.length*2),nu=1.5)
         self.max_overlap=max_overlap
+
+# kern 1**2 * Matern(length_scale=[0.5, 0.8, 30, 70], nu=1.5)
+#self.activ_thresh =0.00005 ... 60 points
+#self.activ_thresh =0.0005 ... 33 points
+#0.00001     def __init__(self,const=1.0,length=np.array([0.6,1.,5., 35.]),n_train=1,max_overlap=3):
