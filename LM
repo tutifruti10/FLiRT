@@ -44,17 +44,21 @@ class LocalModel(object):
         bounds=np.vstack((lower_bound,upper_bound)).T
         self.kernel=C(self.opt.const, (0.01, 1000)) * Matern(length_scale, (bounds),nu=1.5)
         if (X is not None) and (y is not None):
-        	gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
-        	self.X=X
-        	self.Y=y
-        	self.dy=noise
-        	self.trained=True
-        	if self.go is True:
-        	    self.gp=gp.fit(X, y)
-        	    self.kernel=gp.kernel_
-        	    self.overlap=np.zeros(y.shape)
-        	    self.length=gp.kernel_.k2.length_scale
-        	    self.length_past.append(gp.kernel_.k2.length_scale)
+            print(str(X.shape) + ' and ' + str(y.shape) + ' and ' + str(noise.shape))
+            if noise.shape[0]!=1:
+                gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise[:,0],n_restarts_optimizer=self.opt.n_restarts_optimizer)
+            else:
+                gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
+            self.X=X
+            self.Y=y
+            self.dy=noise
+            self.trained=True
+            if self.go is True:
+                self.gp=gp.fit(X, y)
+                self.kernel=gp.kernel_
+                self.overlap=np.zeros(y.shape)
+                self.length=gp.kernel_.k2.length_scale
+                self.length_past.append(gp.kernel_.k2.length_scale)
         return
     
     
@@ -98,8 +102,8 @@ class LocalModel(object):
             
     
     def predict_(self, X):
-    	y_pred, sigma = self.gp.predict(X, return_std=True)
-    	return y_pred, sigma
+        y_pred, sigma = self.gp.predict(X, return_std=True)
+        return y_pred, sigma
     #For incrementally adding points
     def update_(self,x_new,y_new,noise=None):
         if self.trained is True:
@@ -140,7 +144,13 @@ class LocalModel(object):
         print(y_new.shape)
         self.Y=np.concatenate((self.Y,y_new),axis=0)
         if noise is not None:
-            self.dy=np.concatenate((self.dy,noise.reshape(1,)),axis=0)
+            print('self noise shape ' + str(self.dy.shape))
+            print(noise.shape)
+            print(str(self.dy) + ' and ' + str(noise))
+            if self.dy.shape[0]!=1:
+                self.dy=np.concatenate((self.dy,noise.reshape(1,)[:,np.newaxis]),axis=0)
+            else:
+                self.dy=np.concatenate((self.dy[:,np.newaxis],noise.reshape(1,)[:,np.newaxis]),axis=0)
         self.center = np.mean(self.X,axis=0)
             
     
