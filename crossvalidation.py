@@ -31,6 +31,8 @@ X=np.vstack((M1,M2,Mu,TanB)).T
 y=np.atleast_2d(l).T
 un=np.atleast_2d(unc).T
 
+print(un.min())
+
 fracerr=[]
 
 for i in range(0,n_cross_val):
@@ -57,7 +59,7 @@ for i in range(0,n_cross_val):
     opt=Option()
     model=LGR3(opt,4,100)
     
-    model.initialize_lm(Xtrain,ytrain,unctrain)
+    model.initialize_lm(Xtrain,ytrain,unctrain**2)
     ypred,sig=model.predict4(Xpred)
     ypred=ypred[:,np.newaxis]
     sig=sig[:,np.newaxis]
@@ -69,7 +71,7 @@ for i in range(0,n_cross_val):
     
     thresh=(1.96*sig)/np.abs(ypred)
     kept=thresh < 0.3
-    So
+    
     centres=[]
     for m in range(0,model.M):
         centres.append(model.lmodels[m].center)
@@ -85,13 +87,4 @@ for i in range(0,n_cross_val):
     np.save(prec + '_sigma',sig)
     np.save(prec + '_kept',kept)
     
-
-
-        
-
     
-    
-
-
-
-
