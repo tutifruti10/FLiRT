@@ -64,6 +64,7 @@ class LGR3(object):
             noi = None
         else:
             noi=noise[ind]
+        print(noi.shape)
      #   xn=np.array([-64.15266856, 166., 259.,  55.])
         #xn=X[0,:]
         #yn=None
