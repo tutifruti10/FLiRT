@@ -2,90 +2,100 @@ import numpy as np
 import operator
 from LM import LocalModel
 import scipy
-from scipy.spatial import KDTree
 from joblib import Parallel,delayed
+import warnings
+from scipy.spatial import KDTree
 
-class LGR(object):
+class LGR3(object):
 
-    def __init__(self, opt,dim):
+    def __init__(self, opt,dim,n=50):
         self.D = dim
+        self.n=n
         self.M = 0  # number of local models
         self.opt = opt
-        self.beta=opt.beta #noise of data
         self.lmodels = []
         self.lmasks=[]
         self.cut=[]
         self.PointCheck=[]
+        self.length=opt.length
             
-    def add_local_model(self, X=None ,Y=None): 
+    def add_local_model(self, X=None ,Y=None,noise=None,go=True): 
         if(self.M + 1 < self.opt.max_num_lm):
             self.lmodels.append(LocalModel(self.opt,self.D))
             self.lmasks.append(False)
-            self.lmodels[self.M].init_lm(X, Y)
+            self.lmodels[self.M].init_lm(self.length,X, Y,noise,go)
             self.M = self.M + 1
         else:
             print("maximum number of local models reached")
 
         return 0       
-    def init_train(self,X,Y,lm,noise):
+    def init_train(self,X,Y,lm,noise,ls):
         w=np.zeros(X.shape[0])
-        for i in range(self.opt.n_train):
-            x=[]
-            y=[]
-            dy=[]
-            w=lm.get_ww(X)
-            print(self.M,lm.kernel,lm.center)
-            where=w > self.opt.activ_thresh
-            indices=[i for i, x in enumerate(where.T) if x]
-            for index in indices:
-                x.append(X[index])
-                y.append(Y[index])
-                if noise is None:
-                    dy=1e-10    
-                else:
-                    dy.append(noise[index])
-                    
-                    
-            if x==[] or y==[]:
-                print("no points, model deleted")
-                lm=None
-                return lm
-            x=np.asarray(x)
-            y=np.asarray(y)
-            dy=np.asarray(dy)
-            lm.init_lm(x, y,dy)
+        length_scale=np.zeros((self.opt.n_train+1,self.D))
+        length_scale[0]=ls
+     #   for i in range(self.opt.n_train):
+        w=lm.get_ww(X)
+        print(self.M,lm.kernel,lm.center)
+        where=w > self.opt.activ_thresh
+        x=X[where.reshape(X.shape[0],)]
+        y=Y[where.reshape(Y.shape)]
+        if noise is None:
+            dy=1e-6
+        else:
+            dy=noise[where.reshape(noise.shape)]
+        if x.size==0 or y.size==0:
+            print("no points, model deleted")
+            lm=None
+            return lm
+     #   lm.init_lm(length_scale[0],x.reshape(x.shape[0],self.D), y,dy)
+       # length_scale[i+1]=lm.length
+       # print('length_scale', length_scale)
         return lm
-                                
-                                
     def initialize_lm(self, X,Y,noise=None):
+        tree=KDTree(X)
         n_data = X.shape[0]
+        datachoice=int(np.random.uniform(0,n_data,1))
+        np.save('datachoice',datachoice)
+        #d,ind = tree.query(X[0,:],int(np.around(n_data/4)))
+        d,ind=tree.query(X[0,:],self.n)
+        xn=X[ind]
+        yn=Y[ind]
+        if noise is None:
+            noi = None
+        else:
+            noi=noise[ind]
+     #   xn=np.array([-64.15266856, 166., 259.,  55.])
+        #xn=X[0,:]
+        #yn=None
+        self.add_local_model(xn,yn,noi)
+        print(self.lmodels[0].length)
+        self.init_train(xn,yn,self.lmodels[0],noi,self.lmodels[0].length)
+        print('center added',xn)
+        self.length=self.lmodels[0].length #using the learned length scale from now on
+    #    lm=self.lmodels[(self.M-1)]
+      #  lm = self.init_train(X,Y,lm,noise,self.length)
+        #if lm==None:
+         #   del self.lmodels[(self.M-1)]
+          #  self.M-=1
         for n in range(0, n_data):
             xn = X[n, :]
-            w = np.zeros(self.M)
-            for m in range(0, self.M):
-                lm = self.lmodels[m]
-                w[m] = lm.get_ww(xn[np.newaxis, :])
-            if w.size==0:
-                max_act=0
-            else:
-                max_act = w.max()
-            if max_act < self.opt.activ_thresh:
-                self.add_local_model(xn)
-                print('center added',xn)
-                lm=self.lmodels[(self.M-1)]
-                lm = self.init_train(X,Y,lm,noise)
-                if lm==None:
-                    del self.lmodels[(self.M-1)]
-                    del self.lmasks[(self.M-1)]
-                    self.M-=1            
+            zeros=np.zeros(self.M)
+            for i in range(self.M):
+                if xn in self.lmodels[i].X:
+                    zeros[i]=1
+            if np.array_equal(zeros,np.zeros(self.M))==True:
+                if noise is not None:
+                    self.update2(np.atleast_2d(xn),np.atleast_2d(Y[n]),noise[n])
+                else:
+                    self.update2(np.atleast_2d(xn),np.atleast_2d(Y[n]))
+        for i in range(0,self.M):
+            lm=self.lmodels[i]
+            self.lmodels[i].init_lm(self.lmodels[0].length,lm.X,lm.Y,lm.dy)
         for i in range(self.M-1,-1,-1):
             if self.prune_overlaps(i,True):
                 del self.lmodels[i]
                 self.M-=1
                 
-        self.prune_empty()
-        
-        self.Check_TrainData2(X,Y,noise)
         
     def check_overlap2(self,lm1,lm2):
         if not isinstance(lm1,LocalModel) or not isinstance(lm2,LocalModel):
@@ -94,7 +104,7 @@ class LGR(object):
         y=lm2.X
         nrows,ncols=x.shape
         dtype={'names':['f{}'.format(i) for i in range(ncols)],'formats':ncols*[x.dtype]}
-        C,indx,indy=np.intersect1d(x.view(dtype),y.view(dtype),return_indices=True)
+        C,indx,indy=np.intersect1d(np.ascontiguousarray(x).view(dtype),np.ascontiguousarray(y).view(dtype),return_indices=True)
         return indy
         
     def prune_overlaps(self,ind,delete=False):
@@ -109,71 +119,35 @@ class LGR(object):
             r=self.check_overlap2(self.lmodels[l],lm)
             mask[r]=True
         unique=np.sum(mask)
+        dif=(lm.X.shape[0] - unique)/lm.X.shape[0]
         if unique==lm.X.shape[0]:
-            print("Model has no unique points; deleting")
+            print("Model has no not enough unique points;" ,dif,"deleting")
             return True
         else:
             print("Model has ", lm.X.shape[0] - unique, " unique points")
             lm.unique=lm.X.shape[0] - unique
             return False
     def prune_empty(self):
-        for j in range(self.M-1,-1,-1):
-            if self.lmodels[j].trained==False:
-                del self.lmodels[j]
-                self.M-=1
-                print('Untrained model',j, 'del')
-        return
-    def Check_TrainData2(self,X,y,noise):
-        X_train=[]
-        for i in range(self.M):
-            lm=self.lmodels[i]
-            xx=lm.X
-            xt=xx.tolist()
-            X_train.append(xt)
-        if self.D==1:
-            bb=np.concatenate(X_train, axis=0)
-            bb=bb.reshape(bb.shape[0],1)
-        else:
-            if self.M==1:
-                bb=np.asarray(X_train)
-                bb=bb.reshape(bb.shape[1],self.D)
-            else: 
-                bb=np.concatenate(X_train, axis=0)
-                bb=bb.reshape(bb.shape[0],self.D)
-        x=np.unique(bb,axis=0)
-        x=np.ascontiguousarray(x)
-        xx=np.ascontiguousarray(X)
-        nrows,ncols=x.shape
-        dtype={'names':['f{}'.format(i) for i in range(ncols)],'formats':ncols*[x.dtype]}
-        C,indx,indy=np.intersect1d(x.view(dtype),xx.view(dtype),return_indices=True)
-        ii=np.arange(0,xx.shape[0],1)
-        dif=(set(ii) - set(indy))
-        if dif!=set():
-            for index in dif:
-                if noise is None:
-                    self.update2(np.atleast_2d(X[index,:]),np.atleast_2d(y[index]))
-                else:
-                    self.update2(np.atleast_2d(X[index,:]),np.atleast_2d(y[index]),dy[index])
-                print('Updating Lgr with missed points')
-        else:
-            print('All training data included')
-            return
-    
+    	for j in range(self.M-1,-1,-1):
+    		if self.lmodels[j].trained==False:
+    			del self.lmodels[j]
+    			self.M-=1
+    			print('Untrained model',j, 'del')
+    	return
+
     def predict(self, x): 
         
         def indv_model(m,x):
-            print("hi")
             lm = self.lmodels[m]
-            w =  self.lmodels[m].get_ww(x)
+            w =  self.lmodels[m].get_wwold(x)
             y_pred, sigma=  self.lmodels[m].predict_(x)
             y_pred=np.atleast_2d(y_pred).reshape(y_pred.shape[0],1)
             var1=(w.reshape(y_pred.shape)*sigma.reshape(y_pred.shape)**2)+w.reshape(y_pred.shape)*y_pred**2
             var2=w.reshape(y_pred.shape)*y_pred
             wtot=np.array(w).T
-            print(wtot.shape)
+            
             
             yp = w.reshape(y_pred.shape) * y_pred
-            print(yp.shape)
             return [yp,wtot,var1,var2]
         r=np.asarray([Parallel(n_jobs=2)(delayed(indv_model)(m,x) for m in range(0,self.M))])
         
@@ -194,8 +168,64 @@ class LGR(object):
         var1=tots_grid[2]
         var2=tots_grid[3]
         return yp/wtot.reshape(yp.shape), np.sqrt(var1/wtot.reshape(yp.shape)-(var2/wtot.reshape(yp.shape))**2)
+    def predict4(self, x): 
         
-    def update2(self,x_new,y_new,noise=1e-10):
+        def indv_model(m,x):
+            lm = self.lmodels[m]
+            w =  self.lmodels[m].get_wpk2(x)
+            y_pred, sigma=  self.lmodels[m].predict_(x)
+            y_pred=np.atleast_2d(y_pred).reshape(y_pred.shape[0],1)
+            var1=(w.reshape(y_pred.shape)*sigma.reshape(y_pred.shape)**2)+w.reshape(y_pred.shape)*y_pred**2
+            var2=w.reshape(y_pred.shape)*y_pred
+            wtot=np.array(w).T
+            
+            
+            yp = w.reshape(y_pred.shape) * y_pred
+            return [yp,wtot,var1,var2]
+        r=np.asarray([Parallel(n_jobs=2)(delayed(indv_model)(m,x) for m in range(0,self.M))])
+        
+        
+        tots_grid=np.zeros((4,x.shape[0]))
+        for j in range(r.shape[2]):
+            for i in range(r[0,:,j].shape[0]):
+                if i==0:
+                    tots=r[0,:,j][i].T
+                else:
+                    tots=np.vstack((tots,r[0,:,j][i].T))
+                
+            tots_grid[j]=np.sum(tots,axis=0)
+        
+        
+        yp=tots_grid[0]
+        wtot=tots_grid[1]
+        var1=tots_grid[2]
+        var2=tots_grid[3]
+        return yp/wtot.reshape(yp.shape), np.sqrt(var1/wtot.reshape(yp.shape)-(var2/wtot.reshape(yp.shape))**2)
+#incremental building of  models
+    def update2(self,x_new,y_new,dy=None):
+        w = np.zeros(self.M)
+        for m in range(0, self.M):
+            lm = self.lmodels[m]
+            w[m] = lm.get_ww(x_new)
+        index, max_act = max(enumerate(w), key=operator.itemgetter(1))
+        if max_act < self.opt.activ_thresh:
+            print('Addning a new local model with the point', x_new,y_new,dy)
+            if self.D==1:
+                self.add_local_model(np.atleast_2d(x_new),y_new,dy,go=False)
+            else:
+                self.add_local_model(x_new,y_new,dy,go=False)
+            self.lmodels[self.M-1].length=self.lmodels[0].length
+        else:
+            #I got better predictions if there is no overlap
+               # where=w > self.opt.activ_thresh
+                #indices=[i for i, x in enumerate(where) if x]
+                #for ind in indices:
+                  #  print('Incremetal LM updated',index,'data point updated',xn,y_new.reshape(1,),dy)
+            print('adding a new local model with point ', (x_new, y_new.reshape(1,)))
+            self.lmodels[index].update_points(x_new,y_new,dy)
+        return
+#incremental updating of the models        
+    def update_inc(self,x_new,y_new,dy=None):
         n_data = x_new.shape[0]
         for n in range(0, n_data):
             xn = x_new[n, :]
@@ -203,17 +233,19 @@ class LGR(object):
             for m in range(0, self.M):
                 lm = self.lmodels[m]
                 w[m] = lm.get_ww(xn[np.newaxis, :])
-                index, max_act = max(enumerate(w), key=operator.itemgetter(1))
+            index, max_act = max(enumerate(w), key=operator.itemgetter(1))
             if max_act < self.opt.activ_thresh:
+                print('Addning a new local model with the missed point', x_new,y_new,dy)
                 if self.D==1:
-                    self.add_local_model(np.atleast_2d(x_new),y_new[n])
+                    self.add_local_model(np.atleast_2d(x_new),y_new[n],dy.reshape(1,),go=False)
                 else:
-                    print('Addning a new local model with the missed point', x_new,y_new)
-                    self.add_local_model(x_new,y_new[n])
+                    self.add_local_model(x_new,y_new[n],dy.reshape(1,),go=False)
+                self.lmodels[self.M-1].length=self.lmodels[index].length
             else:
                 where=w > self.opt.activ_thresh
                 indices=[i for i, x in enumerate(where) if x]
-                for index in indices:
-                    print('LM updated',index,'w_max',max_act,'data point updated',xn,y_new.reshape(1,))
-                    self.lmodels[index].update_(x_new,y_new.reshape(1,),noise)
-        return 
+                for ind in indices:
+                  #  print('LM updated',ind,'data point updated',xn,y_new.reshape(1,),dy)
+                 #   self.lmodels[index].update_(x_new,y_new.reshape(1,),dy)
+                    self.lmodels[ind].update_(x_new,y_new.reshape(1,),dy)
+        return
