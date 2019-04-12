@@ -29,6 +29,7 @@ TanB=g.get('TanBeta')
 
 X=np.vstack((M1,M2,Mu,TanB)).T
 y=np.atleast_2d(l).T
+un=np.atleast_2d(unc).T
 
 fracerr=[]
 
@@ -37,6 +38,7 @@ for i in range(0,n_cross_val):
         Xtrain=X[i::n_cross_val]
         print(Xtrain.shape)
         ytrain=y[i::n_cross_val]
+        unctrain=un[i::n_cross_val]
         delrang = np.arange(i,X.shape[0],n_cross_val)
         Xpred=np.delete(X, delrang, axis=0)
         ytrue=np.delete(y, delrang, axis=0)
@@ -49,21 +51,23 @@ for i in range(0,n_cross_val):
         print(Xtrain.shape)
         ytrain=np.delete(y,delrang,axis=0)
         print(ytrain.shape)
-        
+        unctrain=np.delete(un,delrang,axis=0)
+        print(unctrain.shape)
         
     opt=Option()
-    model=LGR3(opt,4,50)
+    model=LGR3(opt,4,100)
     
-    model.initialize_lm(Xtrain,ytrain)
+    model.initialize_lm(Xtrain,ytrain,unctrain)
     ypred,sig=model.predict4(Xpred)
     ypred=ypred[:,np.newaxis]
+    sig=sig[:,np.newaxis]
     
     err=100*(np.abs(ypred - ytrue)/ypred)
     avgerr=np.mean(err)
     fracerr.append(avgerr)
     prec= in_file_path[:-5] + '_crossvaln' + str(n_cross_val) + '_run' + str(i) 
     
-    thresh=(1.96*sig)/np.abs(ypred[:,np.newaxis])
+    thresh=(1.96*sig)/np.abs(ypred)
     kept=thresh < 0.3
     So
     centres=[]
@@ -81,7 +85,6 @@ for i in range(0,n_cross_val):
     np.save(prec + '_sigma',sig)
     np.save(prec + '_kept',kept)
     
-frerr=np.asarray(fracerr)
 
 
         
