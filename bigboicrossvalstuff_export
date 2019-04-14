@@ -1,0 +1,34 @@
+prec='MSSMEW_biggishcut_crossvaln'
+prec1='-10_run'
+
+centres=dict()
+err=dict()
+kepts=dict()
+sigmas=dict()
+Xpreds=dict()
+Xtrains=dict()
+ypreds=dict()
+ytrains=dict()
+ytrues=dict()
+for i in range(1,10):
+	centres['centres'+str(i)]=[]
+	err['err'+str(i)]=[]
+	kepts['kepts'+str(i)]=[]
+	sigmas['sigmas'+str(i)]=[]
+	Xpreds['Xpreds'+str(i)]=[]
+	Xtrains['Xtrains'+str(i)]=[]
+	ypreds['ypreds'+str(i)]=[]
+	ytrains['ytrains'+str(i)]=[]
+	ytrues['ytrues'+str(i)]=[]
+
+for i in range(1,10):
+	for j in range(10):
+		centres['centres'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_centres.npy'))
+		err['err'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_err.npy'))
+		kepts['kepts'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_kept.npy'))
+		sigmas['sigmas'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_sigma.npy'))
+		Xpreds['Xpreds'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_Xpred.npy'))
+		Xtrains['Xtrains'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_Xtrain.npy'))
+		ypreds['ypreds'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_ypred.npy'))
+		ytrains['ytrains'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_ytrain.npy'))
+		ytrues['ytrues'+str(i)].append(np.load(prec+str(i)+prec1+str(j)+'_ytrue.npy'))
