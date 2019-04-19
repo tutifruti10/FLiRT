@@ -33,8 +33,7 @@ class LocalModel(object):
     
     def init_lm(self,length_scale=np.array([.5,.5,15., 70.]), X=None, y=None, noise=None,go=True):
         self.go=go
-        if noise is None:
-            noise=1e-6
+
         if X.ndim==1:
             self.center = X
         else:
@@ -44,8 +43,10 @@ class LocalModel(object):
         bounds=np.vstack((lower_bound,upper_bound)).T
         self.kernel=C(self.opt.const, (0.01, 1000)) * Matern(length_scale, (bounds),nu=1.5)
         if (X is not None) and (y is not None):
-            print(str(X.shape) + ' and ' + str(y.shape) + ' and ' + str(noise.shape))
-            if noise.shape[0]!=1:
+            if noise is None:
+                noise=1e-6
+                gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)              
+            elif noise.shape[0]!=1:
                 gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise[:,0],n_restarts_optimizer=self.opt.n_restarts_optimizer)
             else:
                 gp=GaussianProcessRegressor(kernel=self.kernel,alpha=noise,n_restarts_optimizer=self.opt.n_restarts_optimizer)
@@ -144,9 +145,6 @@ class LocalModel(object):
         print(y_new.shape)
         self.Y=np.concatenate((self.Y,y_new),axis=0)
         if noise is not None:
-            print('self noise shape ' + str(self.dy.shape))
-            print(noise.shape)
-            print(str(self.dy) + ' and ' + str(noise))
             if self.dy.shape[0]!=1:
                 self.dy=np.concatenate((self.dy,noise.reshape(1,)[:,np.newaxis]),axis=0)
             else:
