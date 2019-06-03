@@ -20,15 +20,22 @@ For a set of training data with training inputs Xtrain and training outputs Ytra
 
 
 from Lgr import LGR3
+
 from Options import Option
+
 
 opt=Options(constant, lengthscale, n_train, max_overlap) i.e. specify kernel parameter initial guesses constant and lengthscale (uses Matern kernel)
 
+
 model=LGR3(opt, dim, n) - opt is the desired options, dim is the dimensionality of the training input space, n is the number of points to take as an initial training cluster
 
+
 model.initialize_lm(Xtrain,Ytrain, noise) - can include noise on training data, defaults to None
+
 ypred,sigma = model.predict(Xpred) to predict using centre weighting
+
 ypred,sigma = model.predict4(Xpred) to predict using closest point weighting
+
 
 ypred is predicted values at the prediction points Xpred, sigma is the GP variances at those points
 
