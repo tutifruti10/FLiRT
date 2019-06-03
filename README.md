@@ -1,65 +1,34 @@
 # LGR-Local Model 
 Status:
-- able to initialize the a local model with x,y training data
-- possibility to make predictions
-- can increment by calling lm.update_(x_new,y_new) where x_new and y_new consist of one data point
+- able to build a global model consisting of multiple local Gaussian processes, given an input training data set
+- predictions can be made globally with two different weighting schemes
+- can incrementally update training data
 
-Example of initalizig a local model and then incrementing it: 
-import optionsGP
-from optionsGP import Options
+Dependencies: numpy, scipy, sci-kit learn, joblib (does some local multiprocessing, with some minor modification can be foregone)
 
-import LocalModelGp
-from LocalModelGp import LocalModel
-
-import LgrGp
-from LgrGp import LGR
-
-import importlib
-import numpy as np
-from matplotlib import pyplot as plt
-
-opt=Options()
-def f(x):
-    return x*np.sin(x)
-
-X = np.atleast_2d([1., 3., 5., 6.,7.]).T
-y = f(X).ravel()
-x = np.atleast_2d(np.linspace(0, 10, 1000)).T
-x_new = np.atleast_2d([2.]).T
-y_new = f(x_new).ravel()
-
-model2=LGR(opt,1)
-model2.initialize_lm(X)
-model2.train(X,y)
-y_pred,sigma=model2.predict(x)
-sigma=sigma.reshape(1000,1)
-y_pred=y_pred.reshape(1000,1) 
+Key modules: 
+ - Lgr.py: contains overall model structure, including methods for global model building, incremental updating and global prediction.
+           There are functions for the different methods of prediction, including the centre and the closest training point weighting              schemes. We prefer the closest training point method for accuracy but it still has computation time issues. Both are included            to allow for comparisons. 
+           
+ - LM.py: contains local model structure, for building of each local Gaussian process. Includes standard GP training procedures from               sci-kit learn, methods for calculating the weights in both weighting schemes. For maximally weighting near model centres or             the closest training point use get_wwP and get_wpk2 respectively (details about how this actually works in the report). 
+ 
+ - Options.py: small class for structuring key parameters for the global model. 
+ 
+ 
+For a set of training data with training inputs Xtrain and training outputs Ytrain, and prediction inputs Xpred, to train a model & make basic predictions:
 
 
-model2.update(x_new,y_new)
-y_pred2,sigma2=model2.predict(x)
-sigma2=sigma2.reshape(1000,1)
-y_pred2=y_pred2.reshape(1000,1) 
 
-PLOTTING:
-plt.figure()
-plt.plot(x, f(x), 'r:', label=u'$f(x) = x\,\sin(x)$')
-plt.plot(X, y, 'r.', markersize=10, label=u'Observations')
-plt.plot(x_new, y_new, 'y.', markersize=10, label=u'Observations')
-plt.plot(x, y_pred, 'b-', label=u'Prediction')
-plt.fill(np.concatenate([x, x[::-1]]),
-          np.concatenate([y_pred - 1.9600 * sigma,
-                         (y_pred + 1.9600 * sigma)[::-1]]),
-          alpha=.5, fc='b', ec='None', label='95% confidence interval')
-plt.plot(x, y_pred2, 'g-', label=u'PredictionInc')
-plt.fill(np.concatenate([x, x[::-1]]),
-         np.concatenate([y_pred2 - 1.9600 * sigma2,
- (y_pred2 + 1.9600 * sigma2)[::-1]]),
- alpha=.5, fc='g', ec='None', label='95% confidence interval')
-plt.xlabel('$x$')
-plt.ylabel('$f(x)$')
-plt.ylim(-10, 20)
-(-10, 20)
-plt.legend(loc='upper left') 
-plt.show()
+from Lgr import LGR3
+from Options import Option
+
+opt=Options(constant, lengthscale, n_train, max_overlap) i.e. specify kernel parameter initial guesses constant and lengthscale (uses Matern kernel)
+
+model=LGR3(opt, dim, n) - opt is the desired options, dim is the dimensionality of the training input space, n is the number of points to take as an initial training cluster
+
+model.initialize_lm(Xtrain,Ytrain, noise) - can include noise on training data, defaults to None
+ypred,sigma = model.predict(Xpred) to predict using centre weighting
+ypred,sigma = model.predict4(Xpred) to predict using closest point weighting
+
+ypred is predicted values at the prediction points Xpred, sigma is the GP variances at those points
 
